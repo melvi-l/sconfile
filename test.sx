@@ -1,0 +1,318 @@
+; ============================================================================
+; Exhaustive S-expression test file
+; Covers lexer, parser, nesting, schema declarations, defaults and patches.
+; ============================================================================
+
+; ----------------------------------------------------------------------------
+; Basic atoms
+; ----------------------------------------------------------------------------
+
+(symbols
+    simple
+    snake_case
+    kebab-case
+    camelCase
+    PascalCase
+    symbol123
+    true
+    false
+    nil
+    +
+    -
+    *
+    /
+    <=
+    >=
+    !=)
+
+(numbers
+    0
+    1
+    42
+    999999
+    +1
+    +42
+    -1
+    -42
+    0.0
+    1.0
+    3.14159
+    +12.5
+    -0.25
+    -999.999)
+
+(strings
+    ""
+    "a"
+    "hello"
+    "hello world"
+    "assets/fonts/mono.bdf"
+    "#181818"
+    "#D8DEE9FF"
+    "string with spaces")
+
+; ----------------------------------------------------------------------------
+; Empty and nested lists
+; ----------------------------------------------------------------------------
+
+()
+
+(empty-list ())
+
+(nesting
+    (level-1
+        (level-2
+            (level-3
+                (level-4
+                    leaf)))))
+
+; ----------------------------------------------------------------------------
+; Whitespace
+; ----------------------------------------------------------------------------
+
+(whitespace     alpha      beta       gamma)
+
+(
+    multiline-list
+    alpha
+    beta
+    gamma)
+
+; ----------------------------------------------------------------------------
+; Comments
+; ----------------------------------------------------------------------------
+
+; Full-line comment.
+
+(comment-test
+    before
+    ; Comment between nodes.
+    after) ; Comment after a node.
+
+; ----------------------------------------------------------------------------
+; Enum declarations
+; ----------------------------------------------------------------------------
+
+(enum CursorStyle
+    block
+    bar
+    underline)
+
+(enum RasterMode
+    bitmap
+    sdf
+    msdf)
+
+(enum WrapMode
+    none
+    character
+    word)
+
+; ----------------------------------------------------------------------------
+; Primitive/custom type declarations
+; ----------------------------------------------------------------------------
+
+(primitive Color
+    (decoder color-hex))
+
+(primitive Path
+    (decoder path))
+
+(primitive DurationMs
+    (decoder duration-ms))
+
+; ----------------------------------------------------------------------------
+; Type declarations
+; ----------------------------------------------------------------------------
+
+(type Vec2
+    (field x f32
+        (range -100000.0 100000.0))
+
+    (field y f32
+        (range -100000.0 100000.0)))
+
+(type FontConfig
+    (field path string
+        (max-length 255))
+
+    (field size i32
+        (range 6 128))
+
+    (field raster-mode RasterMode))
+
+(type AnimationConfig
+    (field enabled bool)
+
+    (field cursor-blink-ms i32
+        (range 0 10000))
+
+    (field duration-ms i32
+        (range 0 5000)))
+
+(type ThemeConfig
+    (field foreground Color)
+    (field background Color)
+    (field selection Color)
+    (field cursor Color)
+
+    (field opacity f32
+        (range 0.0 1.0)))
+
+(type EditorConfig
+    (field font FontConfig)
+
+    (field wrap-enabled bool)
+    (field wrap-mode WrapMode)
+
+    (field animation AnimationConfig)
+
+    (field theme ThemeConfig)
+
+    (field cursor-style CursorStyle)
+
+    (field tab-width i32
+        (one-of 2 4 8))
+
+    (field origin Vec2)
+
+    (field config-name string
+        (max-length 63)))
+
+; ----------------------------------------------------------------------------
+; Complete default instance
+; ----------------------------------------------------------------------------
+
+(default EditorConfig
+    (font
+        (path "assets/fonts/mono.bdf")
+        (size 16)
+        (raster-mode bitmap))
+
+    (wrap-enabled true)
+    (wrap-mode word)
+
+    (animation
+        (enabled true)
+        (cursor-blink-ms 500)
+        (duration-ms 120))
+
+    (theme
+        (foreground "#D8DEE9")
+        (background "#181818")
+        (selection "#3B4252CC")
+        (cursor "#FFFFFFFF")
+        (opacity 1.0))
+
+    (cursor-style block)
+
+    (tab-width 4)
+
+    (origin
+        (x 0.0)
+        (y 0.0))
+
+    (config-name "default"))
+
+; ----------------------------------------------------------------------------
+; Partial user patch
+; ----------------------------------------------------------------------------
+
+(config EditorConfig
+    (font
+        (size 22)
+        (raster-mode sdf))
+
+    (wrap-enabled false)
+
+    (animation
+        (cursor-blink-ms 750))
+
+    (theme
+        (background "#101418")
+        (opacity 0.95))
+
+    (cursor-style bar)
+
+    (origin
+        (x -12.5)
+        (y +24.0))
+
+    (config-name "user config"))
+
+; ----------------------------------------------------------------------------
+; Generic data forms
+; ----------------------------------------------------------------------------
+
+(table ExampleTable
+    (entry alpha 1)
+    (entry beta 2)
+    (entry gamma 3))
+
+(metadata
+    (author "test")
+    (version 1)
+    (enabled true)
+    (ratio 0.5))
+
+; ----------------------------------------------------------------------------
+; Stress nesting and siblings
+; ----------------------------------------------------------------------------
+
+(root
+    (a 1)
+    (b 2)
+    (c
+        (c0 0)
+        (c1 1)
+        (c2
+            (c20 20)
+            (c21 21)))
+    (d 4)
+    (e
+        (e0
+            (e00
+                (e000 "deep")))))
+
+; ----------------------------------------------------------------------------
+; Invalid lexer/parser cases
+;
+; Keep these commented out so this file remains valid.
+; Uncomment ONE case at a time when testing diagnostics.
+; ----------------------------------------------------------------------------
+
+; Missing closing parenthesis:
+; (broken-list
+;     (value 42)
+
+; Unexpected closing parenthesis:
+; )
+
+; Unterminated string:
+; (value "unterminated)
+
+; Number followed by unexpected syntax, depending on lexer policy:
+; (value 12.foo)
+
+; Empty sign policy test:
+; (symbols + -)
+
+; Unknown semantic type:
+; (type Broken
+;     (field value DoesNotExist))
+
+; Invalid range:
+; (type BrokenRange
+;     (field size i32
+;         (range 128 6)))
+
+; Default violating a range:
+; (default FontConfig
+;     (path "font.bdf")
+;     (size 999)
+;     (raster-mode bitmap))
+
+; Unknown enum value:
+; (config FontConfig
+;     (raster-mode unknown-mode))
+
