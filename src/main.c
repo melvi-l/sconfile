@@ -86,6 +86,45 @@ static inline void sx_print_node(SxNode *node, u32 depth) {
 
 static inline void sx_print_ast(SxNode *root) { sx_print_node(root, 0); }
 
+static inline const char *sx_error_code_string(SxErrorCode code) {
+  switch (code) {
+  case SX_ERROR_NONE:
+    return "NONE";
+  case SX_ERROR_INVALID_TOKEN:
+    return "INVALID_TOKEN";
+  case SX_ERROR_EXPECTED_ATOM:
+    return "EXPECTED_ATOM";
+  case SX_ERROR_UNEXPECTED_RPAREN:
+    return "UNEXPECTED_RPAREN";
+  case SX_ERROR_UNEXPECTED_EOF:
+    return "UNEXPECTED_EOF";
+  case SX_ERROR_MISSING_RPAREN:
+    return "MISSING_RPAREN";
+  case SX_ERROR_OUT_OF_MEMORY:
+    return "OUT_OF_MEMORY";
+  }
+
+  return "UNKNOWN";
+}
+
+static inline void sx_print_error_report(SxParser *parser) {
+  printf("\n=== SxParser error report ===\n");
+
+  if (parser->error.code == SX_ERROR_NONE) {
+    printf("no errors\n");
+    return;
+  }
+
+  u32 count = 0;
+  for (SxError *e = &parser->error; e; e = e->next) {
+    count++;
+    printf("  [%u] %u:%u %s\n", count, e->line, e->column,
+           sx_error_code_string(e->code));
+  }
+
+  printf("====== %u error(s) total =====\n", count);
+}
+
 int main(int argc, char **argv) {
   if (argc < 2) {
     fprintf(stderr, "Please input a config file\n");
@@ -113,4 +152,6 @@ int main(int argc, char **argv) {
 
   SxNode *root = sx_parse_document(&parser);
   sx_print_ast(root);
+  sx_print_error_report(&parser);
+  return parser.error.code == SX_ERROR_NONE ? 0 : 1;
 }

@@ -700,6 +700,26 @@ TEST(error_chain_after_invalid_token) {
   CHECK(e1->next == NULL);
 }
 
+TEST(unterminated_string_in_named_list) {
+  // mirrors the test.sx case: (value "unterminated
+  // -> INVALID_TOKEN at the string (col 8), MISSING_RPAREN at the '(' (col 1)
+  SxParser p = make_parser("(value \"unterminated");
+  SxNode *root = sx_parse_document(&p);
+  CHECK(root != NULL);
+  CHECK(count_children(root) == 0);
+  CHECK(count_errors(&p) == 2);
+  SxError *e0 = nth_error(&p, 0);
+  SxError *e1 = nth_error(&p, 1);
+  CHECK(e0->code == SX_ERROR_INVALID_TOKEN);
+  CHECK(e0->line == 1);
+  CHECK(e0->column == 8);
+  CHECK(e1->code == SX_ERROR_MISSING_RPAREN);
+  CHECK(e1->line == 1);
+  CHECK(e1->column == 1);
+  CHECK(e0->next == e1);
+  CHECK(e1->next == NULL);
+}
+
 TEST(recovery_keeps_valid_forms_after_error) {
   // stray ')' between two valid forms: both forms survive, one error recorded
   SxParser p = make_parser("(a) ) (b)");
@@ -1205,6 +1225,7 @@ int main(void) {
   RUN(lexer_error_inside_list);
   RUN(multiple_errors_collected_as_linked_list);
   RUN(error_chain_after_invalid_token);
+  RUN(unterminated_string_in_named_list);
   RUN(recovery_keeps_valid_forms_after_error);
   // branch coverage drivers
   RUN(branch_coverage_sx_next_token);

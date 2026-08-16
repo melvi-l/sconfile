@@ -282,37 +282,54 @@
 ; ----------------------------------------------------------------------------
 
 ; Missing closing parenthesis:
-; (broken-list
-;     (value 42)
+(broken-list
+    (value 42)
 
 ; Unexpected closing parenthesis:
-; )
+)
 
 ; Unterminated string:
-; (value "unterminated)
+(value "unterminated)
 
 ; Number followed by unexpected syntax, depending on lexer policy:
-; (value 12.foo)
+(value 12.foo)
 
 ; Empty sign policy test:
-; (symbols + -)
+(symbols + -)
 
 ; Unknown semantic type:
-; (type Broken
-;     (field value DoesNotExist))
+(type Broken
+    (field value DoesNotExist))
 
 ; Invalid range:
-; (type BrokenRange
-;     (field size i32
-;         (range 128 6)))
+(type BrokenRange
+    (field size i32
+        (range 128 6)))
 
 ; Default violating a range:
-; (default FontConfig
-;     (path "font.bdf")
-;     (size 999)
-;     (raster-mode bitmap))
+(default FontConfig
+    (path "font.bdf")
+    (size 999)
+    (raster-mode bitmap))
 
 ; Unknown enum value:
-; (config FontConfig
-;     (raster-mode unknown-mode))
+(config FontConfig
+    (raster-mode unknown-mode))
+
+; ----------------------------------------------------------------------------
+; Expected failures — always-on suite for the error reporter.
+; Ordered so the parser recovers and surfaces multiple errors.
+; Cases that consume to EOF (unterminated string, missing paren) go last.
+; ----------------------------------------------------------------------------
+
+; SX_ERROR_UNEXPECTED_RPAREN: stray close at document top level.
+)
+
+; SX_ERROR_UNEXPECTED_RPAREN: second stray close, still recovers.
+)
+
+; SX_ERROR_INVALID_TOKEN + SX_ERROR_MISSING_RPAREN:
+; Unterminated string hits EOF; lexer emits ERROR, parser records
+; INVALID_TOKEN, then the enclosing list never closes -> MISSING_RPAREN.
+(value "unterminated
 

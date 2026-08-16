@@ -257,13 +257,13 @@ static inline SxNode *sx_parse(SxParser *p) {
       sx_set_error(p, SX_ERROR_UNEXPECTED_RPAREN, p->current.line,
                    p->current.column);
       advance_parser(p);
-      continue;
+      return NULL;
     }
     if (p->current.kind == SX_TOKEN_ERROR) {
       sx_set_error(p, SX_ERROR_INVALID_TOKEN, p->current.line,
                    p->current.column);
       advance_parser(p);
-      continue;
+      return NULL;
     }
     break;
   }
@@ -288,11 +288,9 @@ static inline SxNode *sx_parse(SxParser *p) {
       }
       SxNode *child = sx_parse(p);
       if (child == NULL) {
-        if (p->current.kind == SX_TOKEN_EOF) {
-          sx_set_error(p, SX_ERROR_MISSING_RPAREN, open_line, open_column);
-          return NULL;
-        }
-        continue;
+        // unable to parse -> recover by skipping 
+        sx_set_error(p, SX_ERROR_MISSING_RPAREN, open_line, open_column);
+        return NULL;
       }
       child->parent = node;
       if (node->last_child == NULL) {
