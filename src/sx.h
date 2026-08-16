@@ -222,6 +222,7 @@ typedef struct SxError {
   SxErrorCode code;
   uint32_t line;
   uint32_t column;
+  struct SxError *next;
 } SxError;
 
 typedef struct SxParser {
@@ -229,29 +230,72 @@ typedef struct SxParser {
   SxToken current;
   Arena *arena;
   SxError error;
+  SxError *last_error;
 } SxParser;
 
 #define advance_parser(p) (p)->current = sx_next_token(&(p)->lexer)
+static inline void sx_set_error(SxParser *p, SxErrorCode code, u32 line,
+                                u32 column) {
+  if (p->error.code == SX_ERROR_NONE) {
+    p->error = (SxError){code, line, column, NULL};
+    p->last_error = &p->error;
+  } else {
+    SxError *e = ARENA_PUSH_STRUCT(p->arena, SxError);
+    *e = (SxError){code, line, column, NULL};
+    p->last_error->next = e;
+    p->last_error = e;
+  }
+}
+
 static inline SxNode *sx_parse(SxParser *p) {
+  // sanitize
+  for (;;) {
+    if (p->current.kind == SX_TOKEN_EOF) {
+      return NULL;
+    }
+    if (p->current.kind == SX_TOKEN_RPAREN) {
+      sx_set_error(p, SX_ERROR_UNEXPECTED_RPAREN, p->current.line,
+                   p->current.column);
+      advance_parser(p);
+      continue;
+    }
+    if (p->current.kind == SX_TOKEN_ERROR) {
+      sx_set_error(p, SX_ERROR_INVALID_TOKEN, p->current.line,
+                   p->current.column);
+      advance_parser(p);
+      continue;
+    }
+    break;
+  }
+
   SxNode *node = ARENA_PUSH_STRUCT(p->arena, SxNode);
   *node = (SxNode){0};
+
   switch (p->current.kind) {
-  case (SX_TOKEN_LPAREN):
-    // parse list
+  case SX_TOKEN_LPAREN: {
+    u32 open_line = p->current.line;
+    u32 open_column = p->current.column;
+
     node->kind = SX_NODE_LIST;
-    node->line = p->current.line;
-    node->column = p->current.column;
+    node->line = open_line;
+    node->column = open_column;
 
     advance_parser(p);
     while (p->current.kind != SX_TOKEN_RPAREN) {
       if (p->current.kind == SX_TOKEN_EOF) {
-        // missing right paren SX_ERROR_MISSING_RPAREN
-        assert(false);
+        sx_set_error(p, SX_ERROR_MISSING_RPAREN, open_line, open_column);
+        return NULL;
       }
       SxNode *child = sx_parse(p);
+      if (child == NULL) {
+        if (p->current.kind == SX_TOKEN_EOF) {
+          sx_set_error(p, SX_ERROR_MISSING_RPAREN, open_line, open_column);
+          return NULL;
+        }
+        continue;
+      }
       child->parent = node;
       if (node->last_child == NULL) {
-        // first
         assert(node->first_child == NULL);
         node->first_child = child;
       } else {
@@ -264,7 +308,8 @@ static inline SxNode *sx_parse(SxParser *p) {
     // consume right paren
     advance_parser(p);
     break;
-  case (SX_TOKEN_SYMBOL):
+  }
+  case SX_TOKEN_SYMBOL:
     node->kind = SX_NODE_SYMBOL;
     node->text = p->current.text;
     node->line = p->current.line;
@@ -272,7 +317,7 @@ static inline SxNode *sx_parse(SxParser *p) {
 
     advance_parser(p);
     break;
-  case (SX_TOKEN_STRING):
+  case SX_TOKEN_STRING:
     node->kind = SX_NODE_STRING;
     node->text = p->current.text;
     node->line = p->current.line;
@@ -280,7 +325,7 @@ static inline SxNode *sx_parse(SxParser *p) {
 
     advance_parser(p);
     break;
-  case (SX_TOKEN_NUMBER):
+  case SX_TOKEN_NUMBER:
     node->kind = SX_NODE_NUMBER;
     node->text = p->current.text;
     node->line = p->current.line;
@@ -288,20 +333,8 @@ static inline SxNode *sx_parse(SxParser *p) {
 
     advance_parser(p);
     break;
-  case SX_TOKEN_RPAREN: {
-    /* SX_ERROR_UNEXPECTED_RPAREN */
-    assert(false);
-  } break;
-
-  case SX_TOKEN_EOF: {
-    /* SX_ERROR_UNEXPECTED_EOF */
-    assert(false);
-  } break;
-
-  case SX_TOKEN_ERROR: {
-    /* SX_ERROR_LEXER */
-    assert(false);
-  } break;
+  default:
+    break;
   }
 
   return node;
@@ -313,6 +346,9 @@ static inline SxNode *sx_parse_document(SxParser *p) {
 
   while (p->current.kind != SX_TOKEN_EOF) {
     SxNode *child = sx_parse(p);
+    if (child == NULL) {
+      continue;
+    }
 
     child->parent = root;
 

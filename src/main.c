@@ -107,7 +107,7 @@ int main(int argc, char **argv) {
               .column = 1,
           },
       .arena = arena,
-      .error = {SX_ERROR_NONE, 0, 0},
+      .error = {SX_ERROR_NONE, 0, 0, NULL},
   };
   advance_parser(&parser);
 
