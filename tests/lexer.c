@@ -55,6 +55,11 @@ static SxLexer make_lexer(const char *src) {
   };
 }
 
+static bool sx_token_text_eq(SxToken tok, const char *expected) {
+  u64 elen = (u64)strlen(expected);
+  return tok.text.len == elen && memcmp(tok.text.data, expected, elen) == 0;
+}
+
 TEST(test_lparen) {
   SxLexer lx = make_lexer("(");
   SxToken t = sx_next_token(&lx);
@@ -424,16 +429,6 @@ TEST(test_multiple_tokens_sequential) {
   EXPECT_TOKEN(&lx, SX_TOKEN_SYMBOL, "baz");
   EXPECT_TOKEN(&lx, SX_TOKEN_RPAREN, ")");
   EXPECT_TOKEN(&lx, SX_TOKEN_EOF, "");
-}
-
-TEST(test_token_kind_string) {
-  CHECK(strcmp(sx_token_kind_string(SX_TOKEN_EOF), "EOF") == 0);
-  CHECK(strcmp(sx_token_kind_string(SX_TOKEN_LPAREN), "LPAREN") == 0);
-  CHECK(strcmp(sx_token_kind_string(SX_TOKEN_RPAREN), "RPAREN") == 0);
-  CHECK(strcmp(sx_token_kind_string(SX_TOKEN_SYMBOL), "SYMBOL") == 0);
-  CHECK(strcmp(sx_token_kind_string(SX_TOKEN_STRING), "STRING") == 0);
-  CHECK(strcmp(sx_token_kind_string(SX_TOKEN_NUMBER), "NUMBER") == 0);
-  CHECK(strcmp(sx_token_kind_string(SX_TOKEN_ERROR), "ERROR") == 0);
 }
 
 TEST(test_token_text_eq_helper) {

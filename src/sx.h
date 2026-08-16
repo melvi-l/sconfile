@@ -183,51 +183,149 @@ static inline SxToken sx_next_token(SxLexer *lexer) {
   return (SxToken){SX_TOKEN_SYMBOL, text, line, column};
 }
 
-// utils
-static inline const char *sx_token_kind_string(SxTokenKind kind) {
-  switch (kind) {
-  case SX_TOKEN_EOF:
-    return "EOF";
-  case SX_TOKEN_LPAREN:
-    return "LPAREN";
-  case SX_TOKEN_RPAREN:
-    return "RPAREN";
-  case SX_TOKEN_SYMBOL:
-    return "SYMBOL";
-  case SX_TOKEN_STRING:
-    return "STRING";
-  case SX_TOKEN_NUMBER:
-    return "NUMBER";
-  case SX_TOKEN_ERROR:
-    return "ERROR";
-  }
+// ast
+typedef enum SxNodeKind {
+  SX_NODE_ROOT,
+  SX_NODE_LIST,
+  SX_NODE_SYMBOL,
+  SX_NODE_STRING,
+  SX_NODE_NUMBER
+} SxNodeKind;
 
-  return "UNKNOWN";
-}
-static inline bool sx_token_text_eq(SxToken tok, const char *expected) {
-  u64 elen = (u64)strlen(expected);
-  return tok.text.len == elen && memcmp(tok.text.data, expected, elen) == 0;
-}
-static inline void sx_print_tokens(SxSlice source) {
-  SxLexer lexer = {
-      .data = source.data,
-      .len = source.len,
-      .pos = 0,
-      .line = 1,
-      .column = 1,
-  };
+typedef struct SxNode SxNode;
+struct SxNode {
+  SxNodeKind kind;
 
-  for (;;) {
-    SxToken token = sx_next_token(&lexer);
+  SxSlice text;
 
-    printf("%u:%u %-8s `%.*s`\n", token.line, token.column,
-           sx_token_kind_string(token.kind), (int)token.text.len,
-           token.text.data);
+  SxNode *parent;
+  SxNode *first_child;
+  SxNode *last_child;
+  SxNode *next;
 
-    if (token.kind == SX_TOKEN_EOF || token.kind == SX_TOKEN_ERROR) {
-      break;
+  u32 line;
+  u32 column;
+};
+
+typedef enum SxErrorCode {
+  SX_ERROR_NONE = 0,
+
+  SX_ERROR_INVALID_TOKEN,
+  SX_ERROR_EXPECTED_ATOM,
+  SX_ERROR_UNEXPECTED_RPAREN,
+  SX_ERROR_UNEXPECTED_EOF,
+  SX_ERROR_MISSING_RPAREN,
+  SX_ERROR_OUT_OF_MEMORY
+} SxErrorCode;
+
+typedef struct SxError {
+  SxErrorCode code;
+  uint32_t line;
+  uint32_t column;
+} SxError;
+
+typedef struct SxParser {
+  SxLexer lexer;
+  SxToken current;
+  Arena *arena;
+  SxError error;
+} SxParser;
+
+#define advance_parser(p) (p)->current = sx_next_token(&(p)->lexer)
+static inline SxNode *sx_parse(SxParser *p) {
+  SxNode *node = ARENA_PUSH_STRUCT(p->arena, SxNode);
+  *node = (SxNode){0};
+  switch (p->current.kind) {
+  case (SX_TOKEN_LPAREN):
+    // parse list
+    node->kind = SX_NODE_LIST;
+    node->line = p->current.line;
+    node->column = p->current.column;
+
+    advance_parser(p);
+    while (p->current.kind != SX_TOKEN_RPAREN) {
+      if (p->current.kind == SX_TOKEN_EOF) {
+        // missing right paren SX_ERROR_MISSING_RPAREN
+        assert(false);
+      }
+      SxNode *child = sx_parse(p);
+      child->parent = node;
+      if (node->last_child == NULL) {
+        // first
+        assert(node->first_child == NULL);
+        node->first_child = child;
+      } else {
+        assert(node->first_child != NULL);
+        node->last_child->next = child;
+      }
+      node->last_child = child;
     }
+
+    // consume right paren
+    advance_parser(p);
+    break;
+  case (SX_TOKEN_SYMBOL):
+    node->kind = SX_NODE_SYMBOL;
+    node->text = p->current.text;
+    node->line = p->current.line;
+    node->column = p->current.column;
+
+    advance_parser(p);
+    break;
+  case (SX_TOKEN_STRING):
+    node->kind = SX_NODE_STRING;
+    node->text = p->current.text;
+    node->line = p->current.line;
+    node->column = p->current.column;
+
+    advance_parser(p);
+    break;
+  case (SX_TOKEN_NUMBER):
+    node->kind = SX_NODE_NUMBER;
+    node->text = p->current.text;
+    node->line = p->current.line;
+    node->column = p->current.column;
+
+    advance_parser(p);
+    break;
+  case SX_TOKEN_RPAREN: {
+    /* SX_ERROR_UNEXPECTED_RPAREN */
+    assert(false);
+  } break;
+
+  case SX_TOKEN_EOF: {
+    /* SX_ERROR_UNEXPECTED_EOF */
+    assert(false);
+  } break;
+
+  case SX_TOKEN_ERROR: {
+    /* SX_ERROR_LEXER */
+    assert(false);
+  } break;
   }
+
+  return node;
+}
+
+static inline SxNode *sx_parse_document(SxParser *p) {
+  SxNode *root = ARENA_PUSH_STRUCT(p->arena, SxNode);
+  *root = (SxNode){SX_NODE_ROOT};
+
+  while (p->current.kind != SX_TOKEN_EOF) {
+    SxNode *child = sx_parse(p);
+
+    child->parent = root;
+
+    if (root->last_child) {
+      root->last_child->next = child;
+    } else {
+      root->first_child = child;
+    }
+
+    root->last_child = child;
+  }
+
+  return root;
 }
 
 #endif // SX_H
