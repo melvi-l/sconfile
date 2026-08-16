@@ -8,6 +8,8 @@ METAGEN_TEST_PATH="test.sx"
 MAIN_EXEC="main"
 MAIN_TEST_PATH="test.sx"
 
+TESTS_DIR="./tests"
+
 COMMON_LIBS=""
 
 SUBCMD="${1:-all}"
@@ -62,6 +64,35 @@ run_main() {
   fi
 }
 
+build_tests() {
+  local cflags; cflags=$(cflags_for_mode "$MODE")
+  local src base out t0
+  for src in "$TESTS_DIR"/*.c; do
+    [ -e "$src" ] || continue
+    base=$(basename "$src" .c)
+    out="$BUILD_DIR/test_$base"
+    t0=$SECONDS
+    gcc $cflags "$src" -o "$out" \
+      $COMMON_LIBS -I"$SRC_DIR" -Iexternal
+    printf '[tests]    built %s (%s, %ds)\n' "test_$base" "$MODE" "$((SECONDS - t0))"
+  done
+}
+
+run_tests() {
+  local base out
+  for src in "$TESTS_DIR"/*.c; do
+    [ -e "$src" ] || continue
+    base=$(basename "$src" .c)
+    out="$BUILD_DIR/test_$base"
+    printf '[run]     test_%s\n' "$base"
+    if [ "$MODE" = "debug-sanitize" ]; then
+      ASAN_OPTIONS=detect_leaks=0 "$out"
+    else
+      "$out"
+    fi
+  done
+}
+
 mkdir -p "$BUILD_DIR"
 
 case "$SUBCMD" in
@@ -85,6 +116,10 @@ case "$SUBCMD" in
     ;;
   run)
     run_main
+    ;;
+  test|tests)
+    build_tests
+    run_tests
     ;;
   *)
     cat <<EOF >&2
